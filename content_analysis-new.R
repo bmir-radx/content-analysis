@@ -146,7 +146,14 @@ generate_all_charts <- function(data, columns, id_column = "PMID", title = "Char
                      aes(x = reorder(combined_column, record_count), y = record_count, fill = combined_column)) +
         geom_bar(stat = "identity") +
         coord_flip() +
-        labs(y = "Study Count", x = "")
+        labs(y = "Study Count", x = "") +
+        theme(
+          axis.text.x = element_text(size = 14),  # Increase x-axis text size
+          axis.text.y = element_text(size = 16),  # Increase y-axis text size
+          axis.title.x = element_text(size = 16),  # Increase x-axis title size
+          axis.title.y = element_text(size = 16),  # Increase y-axis title size
+          plot.title = element_text(size = 18)  # Increase plot title size (if you have one)
+        )
       
     } else if (chart_type == "bubble") {
       plot <- ggplot(chart_data, aes(x = combined_column, y = record_count, size = record_count, fill = combined_column)) +
