@@ -6,13 +6,11 @@ library(ggplot2)
 library(treemapify)
 library(RColorBrewer)
 library(purrr)  # Add purrr for pmap_chr function
-library(viridis)
 
 base_path <- "/Users/marcosromero/Projects/2024-10-RADxDataHub-ContentReport/"
 
 publications_file_path <- paste0(base_path, "files/RADx_Data_Hub-List_of_Publications.xlsx")
 study_metadata_file_path <- paste0(base_path, "files/RADx_Study_Metadata_10232024xlsx.xlsx")
-study_domainpopfocus_file_path <- paste0(base_path, "files/Study Domain and Population Focus Consolitation.xlsx")
 
 ### FUNCTIONS
 
@@ -32,7 +30,7 @@ standardize_column <- function(df, column_name) {
 }
 
 # Function to generate treemaps
-generate_treemap <- function(data, columns, id_column = "PMID", title = "Treemap of Publications", palette = NULL, min_count = 1, min_font_size = 10) {
+generate_treemap <- function(data, columns, title = "Treemap of Publications", palette = NULL, min_count = 1) {
   
   # Step 1: Combine the columns if multiple are provided
   if (length(columns) > 1) {
@@ -53,19 +51,18 @@ generate_treemap <- function(data, columns, id_column = "PMID", title = "Treemap
            combined_column = str_remove(combined_column, ";\\s*$")) %>%  # Remove trailing semicolons
     filter(combined_column != "N/A", combined_column != "")  # Filter explicit "N/A" and empty values
   
-  # Step 3: Group by the combined column and count distinct IDs
+  # Step 3: Group by the combined column and count publications
   treemap_data <- data_cleaned %>%
     group_by(combined_column) %>%
-    summarize(publication_count = n_distinct(!!sym(id_column))) %>% # Use dynamic ID column
+    summarize(publication_count = n_distinct(PMID),
+              total_participants = sum(estimated_participants, na.rm = TRUE)) %>%  
     filter(publication_count >= min_count)  # Filter rows with publication_count below the minimum threshold
-  
   
   # Step 4: Generate the treemap
   treemap_plot <- ggplot(treemap_data, aes(area = publication_count, fill = combined_column, 
-                                           label = combined_column)) +
+                           label = paste0(combined_column, "\n(", publication_count, ")"))) +
     geom_treemap() +
-    geom_treemap_text(colour = "white", place = "centre", grow = TRUE, reflow = TRUE, 
-                      min.size = min_font_size) +  # Set minimum font size
+    geom_treemap_text(colour = "white", place = "centre", grow = TRUE, reflow = TRUE) +
     labs(title = title) +
     theme(legend.position = "none", plot.margin = unit(c(1, 1, 1, 1), "cm")) +
     (if (!is.null(palette)) scale_fill_manual(values = palette) else NULL)  # Optional palette support
@@ -74,29 +71,23 @@ generate_treemap <- function(data, columns, id_column = "PMID", title = "Treemap
   return(data_cleaned)
 }
 
-
 #### PREPROCESSING ###
 
 # Load the data 
 publications_df <- read_excel(publications_file_path)
 study_df <- read_excel(study_metadata_file_path, sheet = "Cleaned Metadata")
-study_dpf_df <- read_excel(study_domainpopfocus_file_path)
-
 
 # Rename the columns so that they have the same name for merging
 publications_df <- publications_df %>% rename(dbgap_accession = "dbGaP Accession")
 study_df <- study_df %>% rename(dbgap_accession = PHS)
-study_dpf_df <- study_dpf_df %>% rename(dbgap_accession = PHS)
 
 # Remove rows where dbgap_accession is NA
 publications_df <- publications_df %>% filter(!is.na(dbgap_accession))
 study_df <- study_df %>% filter(!is.na(dbgap_accession))
-study_dpf_df <- study_dpf_df %>% filter(!is.na(dbgap_accession))
 
 # Apply normalization to both dataframes
 publications_df <- standardize_column(publications_df, "dbgap_accession")
 study_df <- standardize_column(study_df, "dbgap_accession")
-study_dpf_df <- standardize_column(study_dpf_df, "dbgap_accession")
 
 # Find records in publications_df that don't have a match in study_df
 publications_without_match_df <- publications_df %>%
@@ -211,24 +202,6 @@ ggplot(heatmap_data_filtered, aes(x = Publication_Year, y = combined_column, fil
   labs(title = "Heatmap of Publications by Topic and Year", x = "Publication Year", y = "Topics") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
-
-
-### STUDY CHARTS
-
-# Assuming df is your data frame and you want to keep rows where 'column_name' equals 'specific_value'
-radx_up_df <- study_dpf_df %>%
-  filter(DCC == "RADx-UP")
-radx_rad_df <- study_dpf_df %>%
-  filter(DCC == "RADx-rad")
-radx_tech_df <- study_dpf_df %>%
-  filter(DCC == "RADx-Tech")
-
-generate_treemap(study_dpf_df, c("refined topic"), id_column = "dbgap_accession", title = "Treemap of Studies by Topic", min_count = 1)
-generate_treemap(radx_up_df, c("refined topic"), id_column = "dbgap_accession", title = "Treemap of RADx-UP Studies by Topic", min_count = 1)
-generate_treemap(radx_up_df, c("Refined population"), id_column = "dbgap_accession", title = "Treemap of RADx-UP Studies by Population Focus", min_count = 1)
-generate_treemap(radx_rad_df, c("refined topic"), id_column = "dbgap_accession", title = "Treemap of RADx-rad Studies by Topic", min_count = 1)
-generate_treemap(radx_tech_df, c("refined topic"), id_column = "dbgap_accession", title = "Treemap of RADx-Tech Studies by Topic", min_count = 1)
-
 
 
 
